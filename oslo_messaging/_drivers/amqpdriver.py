@@ -121,6 +121,8 @@ class AMQPIncomingMessage(base.RpcIncomingMessage):
                       'unique_id': unique_id,
                       'reply_q': self.reply_q,
                       'elapsed': self.stopwatch.elapsed()})
+        LOG.error("KAG: sending RPC reply %s id=%s", msg,
+                  self.msg_id)
         conn.direct_send(self.reply_q, rpc_common.serialize_msg(msg))
 
     def reply(self, reply=None, failure=None):
@@ -240,6 +242,9 @@ class AMQPListener(base.PollStyleListener):
         self._current_timeout = ACK_REQUEUE_EVERY_SECONDS_MIN
 
     def __call__(self, message):
+        LOG.error("KAG: message received, url=%s, msg=%s",
+                  self.driver._url,
+                  message)
         ctxt = rpc_amqp.unpack_context(message)
         unique_id = self.msg_id_cache.check_duplicate_message(message)
         if ctxt.msg_id:
@@ -546,6 +551,7 @@ class AMQPDriverBase(base.BaseDriver):
 
             if wait_for_reply:
                 result = self._waiter.wait(msg_id, timeout)
+                LOG.error("KAG RPC reply received %s", result)
                 if isinstance(result, Exception):
                     raise result
                 return result
@@ -555,14 +561,20 @@ class AMQPDriverBase(base.BaseDriver):
 
     def send(self, target, ctxt, message, wait_for_reply=None, timeout=None,
              retry=None):
+        LOG.error("KAG: sending RPC Req target=%s message=%s url=%s",
+                  target, message, self._url)
         return self._send(target, ctxt, message, wait_for_reply, timeout,
                           retry=retry)
 
     def send_notification(self, target, ctxt, message, version, retry=None):
+        LOG.error("KAG: sending Notification target=%s message=%s url=%s",
+                  target, message, self._url)
         return self._send(target, ctxt, message,
                           envelope=(version == 2.0), notify=True, retry=retry)
 
     def listen(self, target, batch_size, batch_timeout):
+        LOG.error("KAG: listen for RPCs target=%s batch=%s timeout=%s url=%s",
+                  target, batch_size, batch_timeout, self._url)
         conn = self._get_connection(rpc_common.PURPOSE_LISTEN)
 
         listener = AMQPListener(self, conn)
@@ -581,6 +593,9 @@ class AMQPDriverBase(base.BaseDriver):
 
     def listen_for_notifications(self, targets_and_priorities, pool,
                                  batch_size, batch_timeout):
+        LOG.error("KAG: listen for Notifications target=%s batch=%s"
+                  "timeout=%s url=%s",
+                  targets_and_priorities, batch_size, batch_timeout, self._url)
         conn = self._get_connection(rpc_common.PURPOSE_LISTEN)
         # NOTE(sileht): The application set batch_size, so we don't need to
         # prefetch more messages, especially for notifications. Notifications
