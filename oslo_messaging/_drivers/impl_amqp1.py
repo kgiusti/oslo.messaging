@@ -111,6 +111,8 @@ class ProtonIncomingMessage(base.RpcIncomingMessage):
                                        deadline,
                                        retry=driver._default_reply_retry,
                                        wait_for_ack=ack)
+            LOG.error("KAG: sending RPC reply %s id=%s", reply,
+                      self._correlation_id)
             driver._ctrl.add_task(task)
             rc = task.wait()
             if rc:
@@ -179,6 +181,9 @@ class ProtonListener(base.PollStyleListener):
         message = qentry['message']
         request, ctxt = unmarshal_request(message)
         disposition = qentry['disposition']
+        LOG.error("KAG: message received, url=%s, msg=%s",
+                  self.driver._url,
+                  message)
         return ProtonIncomingMessage(self, ctxt, request, message, disposition)
 
 
@@ -285,6 +290,8 @@ class ProtonDriver(base.BaseDriver):
                       N means N retries
         :type retry: int
 """
+        LOG.error("KAG: sending RPC Req target=%s message=%s url=%s",
+                  target, message, self._url)
         request = marshal_request(message, ctxt, envelope=False)
         expire = 0
         if timeout:
@@ -315,6 +322,7 @@ class ProtonDriver(base.BaseDriver):
             # Must log, and determine best way to communicate this failure
             # back up to the caller
             reply = unmarshal_response(reply, self._allowed_remote_exmods)
+            LOG.error("KAG RPC reply received %s", reply)
         return reply
 
     @_ensure_connect_called
@@ -336,6 +344,8 @@ class ProtonDriver(base.BaseDriver):
                       N means N retries
         :type retry: int
         """
+        LOG.error("KAG: sending Notification target=%s message=%s url=%s",
+                  target, message, self._url)
         request = marshal_request(message, ctxt, (version == 2.0))
         # no timeout is applied to notifications, however if the backend is
         # queueless this could lead to a hang - provide a default to prevent
@@ -354,6 +364,8 @@ class ProtonDriver(base.BaseDriver):
     @_ensure_connect_called
     def listen(self, target, batch_size, batch_timeout):
         """Construct a Listener for the given target."""
+        LOG.error("KAG: listen for RPCs target=%s batch=%s url=%s",
+                  target, batch_size, self._url)
         LOG.debug("Listen to %s", target)
         listener = ProtonListener(self)
         task = controller.SubscribeTask(target, listener)
@@ -369,6 +381,8 @@ class ProtonDriver(base.BaseDriver):
         priority.
         """
         # TODO(kgiusti) should raise NotImplemented if not broker backend
+        LOG.error("KAG: listen for Notifications target=%s batch=%s url=%s",
+                  targets_and_priorities, batch_size, self._url)
         LOG.debug("Listen for notifications %s", targets_and_priorities)
         if pool:
             raise NotImplementedError('"pool" not implemented by '
